@@ -57,6 +57,8 @@ typedef QSplitter MultiTerminalDisplay;
  * Decisione: c'e` un motivo per non avere direttamente mappa mtd*-tree*, dove ogni mtd e` associato al suo albero?
  * per il momento no, usare questa mappa
  */
+// TODO: implement "Close terminal" on the right click
+// TODO: implement the tree class in a different file
 
 /**
  * Properties of this tree:
@@ -82,8 +84,6 @@ public:
      * @param rootNode The root node, this will be both root and leaf
      */
     MultiTerminalDisplayTree(MultiTerminalDisplay* rootNode);
-
-    // TODO: cont: implementare classe prendendo funzioni necessarie dal manager
 
     /**
      * Returns all the leaves of this tree as a set

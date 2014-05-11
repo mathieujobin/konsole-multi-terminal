@@ -439,17 +439,89 @@ void ViewManager::removeContainer(ViewContainer* container)
 //     container->deleteLater();
 }
 
+void ViewManager::splitLeftRight()
+{
+    splitView(Qt::Horizontal);
+}
+void ViewManager::splitTopBottom()
+{
+    splitView(Qt::Vertical);
+}
+
+void ViewManager::splitView(Qt::Orientation orientation)
+{
+    ViewContainer* container = createContainer();
+
+    // iterate over each session which has a view in the current active
+    // container and create a new view for that session in a new container
+    // TODO XXX: non va bene: prima era _viewSplitter->activeContainer()->views() che
+    //       per un tab container significava tutte le tabs (1 tab per TerminalDisplay).
+    //       Ora sono i TerminalDisplay in una singola tab.
+    // foreach(QWidget* view,  getTerminalsFromContainer(_viewSplitter->activeContainer())) {
+    
+    
+    // For each view of the container (for each tab): _viewSplitter->activeContainer()->views()
+    // Get the tree of MTDs of that Tab
+    // Create a widget that contains all the subwidgets (the MTD tree) but uses the same terminal sessions
+    // Add this widget (i.e., tab) to the new container (created above)
+    
+    foreach (QWidget* view, _viewSplitter->activeContainer()->views()) {
+        MultiTerminalDisplay* mtd = qobject_cast<MultiTerminalDisplay*>(view);
+        if (!mtd) {
+            kError() << "Cannot cast container view to MultiTerminalDisplay";
+            return;
+        }
+
+        _mtdManager->cloneMtd(mtd, container);
+    }
+
+    _viewSplitter->addContainer(container, orientation);
+    emit splitViewToggle(_viewSplitter->containers().count() > 0);
+
+    // focus the new container
+    container->containerWidget()->setFocus();
+
+    // ensure that the active view is focused after the split / unsplit
+    ViewContainer* activeContainer = _viewSplitter->activeContainer();
+    QWidget* activeView = activeContainer ? activeContainer->activeView() : 0;
+
+    if (activeView)
+        activeView->setFocus(Qt::OtherFocusReason);
+}
+
+void ViewManager::expandActiveContainer()
+{
+    _viewSplitter->adjustContainerSize(_viewSplitter->activeContainer(), 10);
+}
+void ViewManager::shrinkActiveContainer()
+{
+    _viewSplitter->adjustContainerSize(_viewSplitter->activeContainer(), -10);
+}
+
+void ViewManager::removeContainer(ViewContainer* container)
+{
+//     // TODO: remove all the multiterminals
+//     // remove session map entries for views in this container
+//     foreach(QWidget* view , _mtdManager->getTerminalDisplays()) {
+//         TerminalDisplay* display = qobject_cast<TerminalDisplay*>(view);
+//         Q_ASSERT(display);
+//         _sessionMap.remove(display);
+//     }
+//     _viewSplitter->removeContainer(container);
+//     container->deleteLater();
+}
+
 void ViewManager::multiTerminalHorizontal()
 {
     // This is called from the menu action
     kDebug() << "ViewManager::multiTerminalHorizontal() ";
-    createMultiTerminalView(Qt::Horizontal);
+    createMultiTerminalView(Qt::Vertical);
 }
 void ViewManager::multiTerminalVertical()
 {
     // This is called from the menu action
     kDebug() << "ViewManager::multiTerminalVertical() ";
-    createMultiTerminalView(Qt::Vertical);
+    createMultiTerminalView(Qt::Horizontal);
 }
 
 void ViewManager::multiTerminalClose()
@@ -465,10 +537,11 @@ void ViewManager::multiTerminalClose()
     _mtdManager->removeTerminalDisplay(mtd);
 
     // TODO: make sure this does not kill all the app when there are remaining tabs
-    if (_mtdManager->getNumberOfNodes(root) == 0) {
-        // no more terminal, let's exit()
-        exit(0);
-    }
+//     // TODO: not ok, this closes the application even if other tabs are open (mtdtrees with different roots)
+//     if (_mtdManager->getNumberOfNodes(root) == 0) {
+//         // no more terminal, let's exit()
+//         exit(0);
+//     }
 
     //_mtdManager->dismissMultiTerminals(mtd);
 }
@@ -503,6 +576,29 @@ void ViewManager::moveMtdFocus(MultiTerminalDisplayManager::Directions direction
     }
 }
 
+void ViewManager::closeActiveContainer()
+{
+    // only do something if there is more than one container active
+    if (_viewSplitter->containers().count() > 1) {
+        ViewContainer* container = _viewSplitter->activeContainer();
+
+        removeContainer(container);
+
+        // focus next container so that user can continue typing
+        // without having to manually focus it themselves
+        nextContainer();
+    }
+}
+
+void ViewManager::closeOtherContainers()
+{
+    ViewContainer* active = _viewSplitter->activeContainer();
+
+    foreach(ViewContainer* container, _viewSplitter->containers()) {
+        if (container != active)
+            removeContainer(container);
+    }
+}
 
 SessionController* ViewManager::createController(Session* session , TerminalDisplay* view)
 {
@@ -719,6 +815,64 @@ ViewContainer* ViewManager::createContainer()
 
     return container;
 }
+
+void ViewManager::containerMoveViewRequest(int index, int id, bool& moved, TabbedViewContainer* sourceTabbedContainer)
+{
+    ViewContainer* container = qobject_cast<ViewContainer*>(sender());
+    SessionController* controller = qobject_cast<SessionController*>(ViewProperties::propertiesById(id));
+
+    if (!controller)
+        return;
+
+    // do not move the last tab in a split view.
+    if (sourceTabbedContainer) {
+        QPointer<ViewContainer> sourceContainer = qobject_cast<ViewContainer*>(sourceTabbedContainer);
+
+        if (_viewSplitter->containers().contains(sourceContainer)) {
+            return;
+        } else {
+            ViewManager* sourceViewManager = sourceTabbedContainer->connectedViewManager();
+
+            // do not remove the last tab on the window
+            if (qobject_cast<ViewSplitter*>(sourceViewManager->widget())->containers().size() > 1) {
+                return;
+            }
+        }
+    }
+
+    createView(controller->session(), container, index);
+    controller->session()->refresh();
+    moved = true;
+}
+
+void ViewManager::setNavigationMethod(NavigationMethod method)
+{
+    _navigationMethod = method;
+
+    KActionCollection* collection = _actionCollection;
+
+    if (collection) {
+        // FIXME: The following disables certain actions for the KPart that it
+        // doesn't actually have a use for, to avoid polluting the action/shortcut
+        // namespace of an application using the KPart (otherwise, a shortcut may
+        // be in use twice, and the user gets to see an "ambiguous shortcut over-
+        // load" error dialog). However, this approach sucks - it's the inverse of
+        // what it should be. Rather than disabling actions not used by the KPart,
+        // a method should be devised to only enable those that are used, perhaps
+        // by using a separate action collection.
+
+        const bool enable = (_navigationMethod != NoNavigation);
+        QAction* action;
+
+        action = collection->action("next-view");
+        if (action) action->setEnabled(enable);
+
+        action = collection->action("previous-view");
+        if (action) action->setEnabled(enable);
+
+        action = collection->action("last-tab");
+        if (action) action->setEnabled(enable);
+
 
 void ViewManager::containerMoveViewRequest(int index, int id, bool& moved, TabbedViewContainer* sourceTabbedContainer)
 {
