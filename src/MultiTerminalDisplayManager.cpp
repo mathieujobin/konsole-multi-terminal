@@ -530,6 +530,7 @@ void MultiTerminalDisplayManager::setFocusForContainer(MultiTerminalDisplay* wid
 {
     // TODO: use a stack of focused widgets
     MultiTerminalDisplayTree* tree = _trees[widget];
+//TODO: this crashes
     setFocusToLeaf(widget, tree);
 }
 

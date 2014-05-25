@@ -185,7 +185,7 @@ void ViewManager::setupActions()
     // Menu item for the vertical split of the multi terminal
     KAction* multiTerminalVerAction = new KAction(KIcon("view-split-left-right"), i18nc("@action:inmenu", "Split Pane &Vertically"), this);
     multiTerminalVerAction->setEnabled(true);
-    multiTerminalVerAction->setShortcut(QKeySequence(Qt::META + Qt::Key_D));
+    multiTerminalVerAction->setShortcut(QKeySequence(Qt::META + Qt::CTRL + Qt::Key_D));
     collection->addAction("multi-terminal-ver", multiTerminalVerAction);
     _viewSplitter->addAction(multiTerminalVerAction);
     connect(multiTerminalVerAction, SIGNAL(triggered()), this, SLOT(multiTerminalVertical()));
@@ -194,7 +194,7 @@ void ViewManager::setupActions()
     // Menu item for the horizontal split of the multi terminal
     KAction* multiTerminalHorAction = new KAction(KIcon("view-split-top-bottom"), i18nc("@action:inmenu", "Split Pane &Horizontally"), this);
     multiTerminalHorAction->setEnabled(true);
-    multiTerminalHorAction->setShortcut(QKeySequence(Qt::META + Qt::CTRL + Qt::Key_D));
+    multiTerminalHorAction->setShortcut(QKeySequence(Qt::META + Qt::Key_D));
     collection->addAction("multi-terminal-hor", multiTerminalHorAction);
     _viewSplitter->addAction(multiTerminalHorAction);
     connect(multiTerminalHorAction, SIGNAL(triggered()), this, SLOT(multiTerminalHorizontal()));
@@ -426,19 +426,6 @@ void ViewManager::viewActivated(QWidget* view)
     view->setFocus(Qt::OtherFocusReason);
 }
 
-void ViewManager::removeContainer(ViewContainer* container)
-{
-//     // TODO: remove all the multiterminals
-//     // remove session map entries for views in this container
-//     foreach(QWidget* view , _mtdManager->getTerminalDisplays()) {
-//         TerminalDisplay* display = qobject_cast<TerminalDisplay*>(view);
-//         Q_ASSERT(display);
-//         _sessionMap.remove(display);
-//     }
-//     _viewSplitter->removeContainer(container);
-//     container->deleteLater();
-}
-
 void ViewManager::splitLeftRight()
 {
     splitView(Qt::Horizontal);
@@ -532,7 +519,7 @@ void ViewManager::multiTerminalClose()
 
     // MultiTerminalDisplay with focus
     MultiTerminalDisplay* mtd = _mtdManager->getFocusedMultiTerminalDisplay(containerMtd);
-    MultiTerminalDisplay* root = _mtdManager->getRootNode(containerMtd);
+    //MultiTerminalDisplay* root = _mtdManager->getRootNode(containerMtd);
 
     _mtdManager->removeTerminalDisplay(mtd);
 
@@ -816,35 +803,6 @@ ViewContainer* ViewManager::createContainer()
     return container;
 }
 
-void ViewManager::containerMoveViewRequest(int index, int id, bool& moved, TabbedViewContainer* sourceTabbedContainer)
-{
-    ViewContainer* container = qobject_cast<ViewContainer*>(sender());
-    SessionController* controller = qobject_cast<SessionController*>(ViewProperties::propertiesById(id));
-
-    if (!controller)
-        return;
-
-    // do not move the last tab in a split view.
-    if (sourceTabbedContainer) {
-        QPointer<ViewContainer> sourceContainer = qobject_cast<ViewContainer*>(sourceTabbedContainer);
-
-        if (_viewSplitter->containers().contains(sourceContainer)) {
-            return;
-        } else {
-            ViewManager* sourceViewManager = sourceTabbedContainer->connectedViewManager();
-
-            // do not remove the last tab on the window
-            if (qobject_cast<ViewSplitter*>(sourceViewManager->widget())->containers().size() > 1) {
-                return;
-            }
-        }
-    }
-
-    createView(controller->session(), container, index);
-    controller->session()->refresh();
-    moved = true;
-}
-
 void ViewManager::setNavigationMethod(NavigationMethod method)
 {
     _navigationMethod = method;
@@ -872,7 +830,8 @@ void ViewManager::setNavigationMethod(NavigationMethod method)
 
         action = collection->action("last-tab");
         if (action) action->setEnabled(enable);
-
+    }
+}
 
 void ViewManager::containerMoveViewRequest(int index, int id, bool& moved, TabbedViewContainer* sourceTabbedContainer)
 {
@@ -902,8 +861,6 @@ void ViewManager::containerMoveViewRequest(int index, int id, bool& moved, Tabbe
     controller->session()->refresh();
     moved = true;
 }
-
-
 
 ViewManager::NavigationMethod ViewManager::navigationMethod() const
 {

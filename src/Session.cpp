@@ -1084,7 +1084,10 @@ QStringList Session::arguments() const
 
 QString Session::program() const
 {
-    return _program;
+    //if (_program)
+        return _program;
+    //else
+    //    return '';
 }
 
 bool Session::isMonitorActivity() const
